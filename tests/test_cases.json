@@ -1,5 +1,5 @@
 {
-  "description": "SignalBrief M2 test cases. Offline cases (O*) test the MCP tool parsing and the citation guardrail with saved sample data - no network or API key needed. Live cases (L*) run the full agent against NRP + the real MCP tools; because news changes daily, their expected outputs are properties of the result, not exact text.",
+  "description": "SignalBrief M3 test cases. Offline cases (O*) test MCP tool parsing, the citation guardrail, coverage memory, both handoffs, fact-check verdict handling, the tool budget and the ReAct trace with saved sample data - no API key needed (O5 needs Chroma's local embedding model, downloaded once). Live cases (L*) run the 3-agent pipeline against NRP + the real MCP tools; because news changes daily, their expected outputs are properties of the result, not exact text.",
   "offline": [
     {
       "id": "O1",
@@ -24,32 +24,74 @@
       "name": "Citation guardrail drops invented sources",
       "input": "Agent text with 3 bullets: one citing a real ref, one citing a ref that no tool returned (n-fffff), one with no citation at all.",
       "expected_output": "Only the first bullet survives, rewritten with a real markdown link '[MusicRadar, 2026-09-28](https://...)'; stats = kept 1, dropped 2, bad_refs 1."
+    },
+    {
+      "id": "O5",
+      "name": "Coverage memory recognizes repeats (ChromaDB)",
+      "input": "Empty memory; remember the Serum 2 story under topic 'New VST plugins'. Then look up: (a) same URL, (b) a re-worded Serum 2 headline from another outlet, (c) an unrelated Arturia headline, (d) the Serum headline under a different topic, (e) the same URL with sent_on 60 days ago.",
+      "expected_output": "(a) match 'same_url'; (b) match 'same_story' with cosine distance <= 0.35; (c) no match; (d) no match (memory is per topic); (e) no match (outside the 30-day window)."
+    },
+    {
+      "id": "O6",
+      "name": "Handoff 1 (Scout -> Editor) is built from real tool records",
+      "input": "Scout answer selecting [Arturia ref], [n-fffff] (never returned by a tool) and [Serum ref] (already in memory); plus a second Scout answer 'NONE'.",
+      "expected_output": "Packet: 1 candidate (Arturia), 1 already_covered (Serum), invented_refs ['n-fffff']; handoff triggers; the Editor input contains no URLs and no covered item. For 'NONE': 0 candidates and the handoff does not trigger."
+    },
+    {
+      "id": "O7",
+      "name": "Handoff 2 + fact-check verdicts are applied in code",
+      "input": "4 Editor bullets (one written without a '- ' marker) and a FactCheckReport: id0 supported, id1 overstated with a revision that lost its [ref], id2 unsupported, id3 no verdict.",
+      "expected_output": "split_bullets keeps the dash-less line; the request attaches each bullet's cited records; result keeps 3 bullets: original id0, revised id1 with its ref restored, id3 kept as unchecked; id2 dropped; stats supported 1 / overstated 1 / unsupported 1 / unchecked 1."
+    },
+    {
+      "id": "O8",
+      "name": "Tool budget is enforced by the MCP tool filter",
+      "input": "ToolBudget(max_source_calls=3, max_memory_calls=1); record recall_coverage once and search_news three times.",
+      "expected_output": "Before: all tools visible. After: recall_coverage, search_news, search_research_papers and get_artist_releases are hidden; an unrelated tool stays visible."
+    },
+    {
+      "id": "O9",
+      "name": "ReAct trace groups Thought -> Action -> Observation",
+      "input": "Simplified run items: thought, action recall_coverage, observation (0 already sent), thought, action search_news, observation (wrapped JSON with 2 articles), answer.",
+      "expected_output": "3 steps: step 1 and 2 each have thought + action + observation ('0 already sent', '2 articles'); step 3 is the answer."
     }
   ],
   "live": [
     {
       "id": "L1",
-      "name": "News topic - new VST plugins",
+      "name": "News topic - full 3-agent pipeline",
       "input": {"name": "New VST plugins", "kind": "news", "query": "new VST plugin release", "days": 7},
-      "expected_output": "Agent calls search_news; newsletter section has 1-4 bullets, each ending in a working link with a source name and a date inside the 7-day window; bad_refs = 0. (If the week was quiet: '_No notable updates in this window._' and 0 bullets.)"
+      "expected_output": "Scout calls recall_coverage then search_news, <= 3 source calls; if handoff 1 fires, the Editor and Fact-checker both run, every published bullet has a verdict (unchecked = 0) and a working link; bad_refs = 0. Otherwise exactly '_No notable updates in this window._'."
     },
     {
       "id": "L2",
-      "name": "Artist topic - releases + features",
+      "name": "Artist topic - tool budget holds (M2 L2 failure)",
       "input": {"name": "Kendrick Lamar", "kind": "artist", "query": "Kendrick Lamar", "days": 30},
-      "expected_output": "Agent calls get_artist_releases AND search_news (at most 3 tool calls). Any release bullet links to musicbrainz.org; any feature/news bullet links to a news source. No release date is stated that isn't in the tool output. bad_refs = 0."
+      "expected_output": "Scout calls get_artist_releases; source tool calls <= 3 (M2 made 4-6); bad_refs = 0; any release bullet links to musicbrainz.org."
     },
     {
       "id": "L3",
-      "name": "Research topic - cancer immunotherapy",
+      "name": "Research topic - PubMed first",
       "input": {"name": "Cancer research", "kind": "research", "query": "cancer immunotherapy clinical trial", "days": 7},
-      "expected_output": "Agent calls search_research_papers first; bullets link to pubmed.ncbi.nlm.nih.gov; wording describes each as a single study rather than a cure; bad_refs = 0."
+      "expected_output": "The first source tool the Scout calls is search_research_papers; bad_refs = 0; published bullets were all fact-checked."
     },
     {
       "id": "L4",
       "name": "Nonsense topic - must not hallucinate",
       "input": {"name": "Zorblaxian quantum kazoo", "kind": "news", "query": "Zorblaxian quantum kazoo", "days": 3},
-      "expected_output": "Tools return no articles; section is exactly '_No notable updates in this window._' with 0 kept bullets. Any invented bullet would be dropped by the guardrail and counted."
+      "expected_output": "Tools return no records; handoff 1 does not trigger; section is exactly '_No notable updates in this window._' with 0 kept bullets."
+    },
+    {
+      "id": "L5",
+      "name": "Memory - day 2 does not repeat day 1",
+      "input": "Run the L1 topic twice in a row against the same empty temporary memory, writing memory after each run.",
+      "expected_output": "No source URL published in run 1 is published again in run 2; memory count after run 1 equals the number of sources published in run 1."
+    },
+    {
+      "id": "L6",
+      "name": "Fact-checker catches an overstated claim",
+      "input": "Fact-checker only, 2 seeded bullets citing the headline 'Baby Keem announces new album Ca$ino, previews collaboration with Kendrick Lamar': (0) adds 'the top-selling track of the week' (the M2 failure); (1) a faithful paraphrase.",
+      "expected_output": "Bullet 0 verdict is 'overstated' or 'unsupported'; bullet 1 verdict is 'supported'."
     }
   ]
 }
