@@ -60,6 +60,7 @@ from pipeline import (
     build_factcheck_request,
     build_research_packet,
     editor_input,
+    effective_verdict,
     handoff_to_editor,
     react_trace,
     split_bullets,
@@ -185,11 +186,12 @@ the sources it cites (headline, outlet, date, type). You only see headlines and
 metadata, so a claim is supported only if the cited headline/metadata states it
 or directly implies it.
 
-For EACH item, think step by step in `reasoning`:
-  1. List every factual claim in the bullet (what happened, who, numbers,
-     dates, rankings, "first", "new", study type, outcomes).
-  2. For each claim, say which cited headline supports it, or that none does.
-  3. Then decide:
+For EACH item, think step by step:
+  1. In `claims`, list every factual claim in the bullet (what happened, who,
+     numbers, dates, rankings, "first", "new", study type, outcomes), each with
+     in_source = true only if a cited headline/metadata states or implies it.
+  2. In `reasoning`, say which cited headline supports each claim, or that none does.
+  3. Then decide (the verdict must agree with your claims list):
      - "supported": every factual claim is backed. A short, hedged note on why
        it matters to the reader is fine and is not a factual claim.
      - "overstated": the core news is backed but the bullet adds a detail the
@@ -362,7 +364,9 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
         usage["checker"] = usage_of(checker_result)
         report = checker_result.final_output
         for v in report.verdicts:
-            print(f"[check {v.id}] {v.verdict.upper()}: {v.reasoning[:160]}")
+            verdict, override = effective_verdict(v)
+            note = f" (model said {v.verdict.upper()}; overridden: {override})" if override else ""
+            print(f"[check {v.id}] {verdict.upper()}{note}: {v.reasoning[:160]}")
     except Exception as exc:
         print(f"[error] Fact-checker failed on '{topic['name']}': {exc} (bullets kept as unchecked)")
     kept, fc_stats = apply_verdicts(bullets, report)
@@ -375,7 +379,9 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
     published_refs = dict.fromkeys(r for line in markdown_bullets(kept, packet_sources)
                                    for r in REF_PATTERN.findall(line))
     return {"topic": topic, "markdown": markdown, "stats": stats, "factcheck": fc_stats,
-            "verdicts": [v.model_dump() for v in report.verdicts] if report else [],
+            "verdicts": [{**v.model_dump(), "effective_verdict": effective_verdict(v)[0],
+                          "override": effective_verdict(v)[1]}
+                         for v in report.verdicts] if report else [],
             "draft": bullets, "final_bullets": kept, **base, "usage": usage,
             "published": [packet_sources[r] for r in published_refs]}
 

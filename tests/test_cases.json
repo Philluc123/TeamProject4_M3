@@ -54,6 +54,12 @@
       "name": "ReAct trace groups Thought -> Action -> Observation",
       "input": "Simplified run items: thought, action recall_coverage, observation (0 already sent), thought, action search_news, observation (wrapped JSON with 2 articles), answer.",
       "expected_output": "3 steps: step 1 and 2 each have thought + action + observation ('0 already sent', '2 articles'); step 3 is the answer."
+    },
+    {
+      "id": "O10",
+      "name": "Self-contradicting 'supported' verdict is overridden",
+      "input": "3 verdicts marked 'supported': (0) reasoning says 'top-selling track of the week - not mentioned in the source' (the live L6 failure); (1) claim list has one claim with in_source=false; (2) all claims in_source=true.",
+      "expected_output": "Effective verdicts: overstated, overstated, supported. Bullets 0 and 1 are dropped (no rewrite offered); bullet 2 is kept; stats overridden = 2."
     }
   ],
   "live": [
@@ -91,7 +97,7 @@
       "id": "L6",
       "name": "Fact-checker catches an overstated claim",
       "input": "Fact-checker only, 2 seeded bullets citing the headline 'Baby Keem announces new album Ca$ino, previews collaboration with Kendrick Lamar': (0) adds 'the top-selling track of the week' (the M2 failure); (1) a faithful paraphrase.",
-      "expected_output": "Bullet 0 verdict is 'overstated' or 'unsupported'; bullet 1 verdict is 'supported'."
+      "expected_output": "Bullet 0's effective verdict (after the code consistency check) is 'overstated' or 'unsupported'; bullet 1's is 'supported'. The model's raw verdicts are printed alongside."
     }
   ]
 }

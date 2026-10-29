@@ -28,6 +28,7 @@ if hasattr(sys.stdout, "reconfigure"):
 import news_mcp_server as srv  # noqa: E402
 from citations import sources_from_tool_outputs, verify_and_link  # noqa: E402
 from pipeline import (  # noqa: E402
+    Claim,
     FactCheckReport,
     ToolBudget,
     Verdict,
@@ -36,6 +37,7 @@ from pipeline import (  # noqa: E402
     build_factcheck_request,
     build_research_packet,
     editor_input,
+    effective_verdict,
     handoff_to_editor,
     react_trace,
     split_bullets,
@@ -187,8 +189,33 @@ def test_o7_factcheck():
           and kept[1] == f"- **Serum 2.** Xfer released a Serum 2 update. [{s}]"
           and "tinnitus" not in " ".join(kept)
           and kept[2] == bullets[3]
-          and stats == {"supported": 1, "overstated": 1, "unsupported": 1, "unchecked": 1})
+          and stats == {"supported": 1, "overstated": 1, "unsupported": 1, "unchecked": 1,
+                        "overridden": 0})
     check("O7", ok, "supported kept, overstated revised (ref restored), unsupported dropped, missing = unchecked")
+
+
+def test_o10_verdict_consistency():
+    ref = news_items()[0]["ref"]
+    bullets = [f"- **Collab.** The collab is the top-selling track of the week. [{ref}]",
+               f"- **Collab 2.** The collab is the top-selling track of the week. [{ref}]",
+               f"- **Album.** Baby Keem announced his album. [{ref}]"]
+    report = FactCheckReport(verdicts=[
+        # the exact L6 failure: reasoning finds the problem, verdict says supported
+        Verdict(id=0, reasoning="(2) top-selling track of the week - not mentioned in the source.",
+                verdict="supported"),
+        Verdict(id=1, claims=[Claim(claim="collab exists", in_source=True),
+                              Claim(claim="top-selling track of the week", in_source=False)],
+                reasoning="Mostly fine.", verdict="supported"),
+        Verdict(id=2, claims=[Claim(claim="album announced", in_source=True)],
+                reasoning="The headline states the album announcement.", verdict="supported"),
+    ])
+    effective = [effective_verdict(v)[0] for v in report.verdicts]
+    kept, stats = apply_verdicts(bullets, report)
+    print("  O10 effective:", effective, "\n  O10 kept:", kept, "\n  O10 stats:", stats)
+    ok = (effective == ["overstated", "overstated", "supported"]
+          and kept == [bullets[2]]
+          and stats["overridden"] == 2 and stats["supported"] == 1)
+    check("O10", ok, "'supported' that contradicts its own reasoning/claims is overridden and dropped")
 
 
 def test_o8_budget():
@@ -236,16 +263,20 @@ def checked_ok(s: dict) -> bool:
     return s["stats"]["kept"] == 0 or s.get("factcheck", {}).get("unchecked", 1) == 0
 
 
-async def run_live():
+async def run_live(only: list[str] | None = None):
     import signalbrief_agent as sb
     from agents import Agent, Runner
 
     cases = {c["id"]: c for c in json.loads((ROOT / "tests" / "test_cases.json").read_text())["live"]}
+    wanted = lambda cid: not only or cid in only
 
-    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as mem_dir:
-        topics = [dict(cases[i]["input"]) for i in ("L1", "L2", "L3", "L4")]
-        sections = await sb.run(topics, "test", Path(mem_dir), write_memory=False)
-    for cid, s in zip(("L1", "L2", "L3", "L4"), sections):
+    topic_ids = [i for i in ("L1", "L2", "L3", "L4") if wanted(i)]
+    sections = []
+    if topic_ids:
+        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as mem_dir:
+            topics = [dict(cases[i]["input"]) for i in topic_ids]
+            sections = await sb.run(topics, "test", Path(mem_dir), write_memory=False)
+    for cid, s in zip(topic_ids, sections):
         print(f"\n--- {cid}: {cases[cid]['name']} ---")
         print("  section:\n    " + s["markdown"].replace("\n", "\n    "))
         tools, budget, stats = s.get("tools", []), s.get("budget", {}), s["stats"]
@@ -266,7 +297,14 @@ async def run_live():
         check(cid, ok, f"tools={tools} source_calls={budget.get('source_calls')} kept={stats['kept']} "
                        f"factcheck={s.get('factcheck')} bad_refs={stats['bad_refs']}")
 
-    # L5: memory across two "days"
+    if wanted("L5"):
+        await live_l5(sb, cases)
+    if wanted("L6"):
+        await live_l6(sb, cases, Agent, Runner)
+
+
+async def live_l5(sb, cases):
+    """L5: memory across two "days"."""
     print(f"\n--- L5: {cases['L5']['name']} ---")
     from memory_store import CoverageMemory
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as mem_dir:
@@ -280,7 +318,9 @@ async def run_live():
           f"run1 published {len(urls1)}, memory={count1}; run2 published {len(urls2)}, "
           f"repeats={len(urls1 & urls2)}, code-skipped as already sent={skipped}")
 
-    # L6: fact-checker on seeded bullets
+
+async def live_l6(sb, cases, Agent, Runner):
+    """L6: fact-checker on seeded bullets."""
     print(f"\n--- L6: {cases['L6']['name']} ---")
     checker = Agent(name="SignalBrief Fact-checker", instructions=sb.CHECKER_INSTRUCTIONS,
                     model=sb.MODEL, output_type=FactCheckReport)
@@ -294,30 +334,37 @@ async def run_live():
                             "previewed a collaboration with Kendrick Lamar. [n-abcde]",
          "cited_sources": [src]},
     ]}
+    raw, verdicts = {}, {}
     try:
         report = (await Runner.run(checker, json.dumps(request), max_turns=2)).final_output
-        verdicts = {v.id: v.verdict for v in report.verdicts}
         for v in report.verdicts:
-            print(f"  [{v.id}] {v.verdict}: {v.reasoning[:200]}")
+            raw[v.id] = v.verdict
+            verdicts[v.id], override = effective_verdict(v)
+            print(f"  [{v.id}] model={v.verdict} effective={verdicts[v.id]} {override}: "
+                  f"{v.reasoning[:200]}")
     except Exception as exc:
         verdicts = {"error": str(exc)}
+    # judged on the verdict the pipeline acts on (after the code consistency check)
     check("L6", verdicts.get(0) in ("overstated", "unsupported") and verdicts.get(1) == "supported",
-          f"verdicts={verdicts}")
+          f"effective verdicts={verdicts} (model's raw verdicts={raw})")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--live", action="store_true", help="also run live agent cases (needs NRP key)")
+    ap.add_argument("--case", nargs="+", metavar="ID",
+                    help="only run these live cases, e.g. --case L5 L6 (implies --live)")
     args = ap.parse_args()
 
     print("Offline test cases")
     for test in (test_o1_news_parser, test_o2_music_parser, test_o3_pubmed_parser,
                  test_o4_guardrail, test_o5_memory, test_o6_handoff_packet,
-                 test_o7_factcheck, test_o8_budget, test_o9_react_trace):
+                 test_o7_factcheck, test_o8_budget, test_o9_react_trace,
+                 test_o10_verdict_consistency):
         test()
-    if args.live:
+    if args.live or args.case:
         print("\nLive test cases (3-agent pipeline, real tools + NRP model)")
-        asyncio.run(run_live())
+        asyncio.run(run_live([c.upper() for c in args.case] if args.case else None))
 
     passed = sum(ok for _, ok, _ in results)
     print(f"\n{passed}/{len(results)} test cases passed")

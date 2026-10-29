@@ -208,8 +208,16 @@ def build_factcheck_request(bullets: list[str], packet: dict) -> dict:
     return {"topic": packet["topic"]["name"], "items": items}
 
 
+class Claim(BaseModel):
+    claim: str = Field(description="One factual claim made by the bullet")
+    in_source: bool = Field(description="True only if a cited headline/metadata states it or "
+                                        "directly implies it")
+
+
 class Verdict(BaseModel):
     id: int = Field(description="id of the bullet being checked")
+    claims: list[Claim] = Field(default_factory=list,
+                                description="Every factual claim in the bullet, checked one by one")
     reasoning: str = Field(description="Step by step: list each claim in the bullet and "
                                        "whether the cited headline/metadata states it.")
     verdict: Literal["supported", "overstated", "unsupported"]
@@ -221,24 +229,51 @@ class FactCheckReport(BaseModel):
     verdicts: list[Verdict]
 
 
+# Phrases that mean the checker itself found a claim missing from the source.
+NOT_IN_SOURCE = re.compile(
+    r"not (?:mentioned|stated|present|supported by|in the (?:headline|source|title))"
+    r"|does(?:n['’]t| not) (?:mention|state|say|support)|no mention", re.I)
+
+
+def effective_verdict(v: Verdict) -> tuple[str, str]:
+    """The verdict code will act on, plus why it differs from the model's (if it does).
+
+    Seen in live test L6: gpt-oss wrote "top-selling track of the week - not
+    mentioned" in its reasoning and still answered "supported". A "supported"
+    verdict is only accepted if the checker's own claim list and reasoning agree.
+    """
+    if v.verdict == "supported":
+        missing = [c.claim for c in v.claims if not c.in_source]
+        if missing:
+            return "overstated", f"claims marked not in source: {missing}"
+        if NOT_IN_SOURCE.search(v.reasoning):
+            return "overstated", "reasoning says a claim is not in the source"
+    return v.verdict, ""
+
+
 def apply_verdicts(bullets: list[str], report: FactCheckReport | None) -> tuple[list[str], dict]:
     """Keep supported bullets, swap in revisions for overstated ones, drop unsupported.
 
     A bullet with no verdict (checker failed or skipped it) is kept but counted
-    as `unchecked`, and the newsletter footer says so.
+    as `unchecked`, and the newsletter footer says so. A "supported" verdict that
+    contradicts the checker's own reasoning is treated as overstated (counted in
+    `overridden`); with no rewrite offered, that bullet is dropped.
     """
-    stats = {"supported": 0, "overstated": 0, "unsupported": 0, "unchecked": 0}
+    stats = {"supported": 0, "overstated": 0, "unsupported": 0, "unchecked": 0, "overridden": 0}
     verdicts = {v.id: v for v in (report.verdicts if report else [])}
     kept = []
     for i, b in enumerate(bullets):
         v = verdicts.get(i)
+        verdict, override = effective_verdict(v) if v else (None, "")
+        if override:
+            stats["overridden"] += 1
         if v is None:
             stats["unchecked"] += 1
             kept.append(b)
-        elif v.verdict == "supported":
+        elif verdict == "supported":
             stats["supported"] += 1
             kept.append(b)
-        elif v.verdict == "overstated":
+        elif verdict == "overstated":
             stats["overstated"] += 1
             revised = v.revised_bullet.strip()
             if not revised:
