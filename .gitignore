@@ -4,3 +4,7 @@ venv/
 __pycache__/
 *.pyc
 output/mcp_server.log
+# local coverage memory (ChromaDB) and per-run logs
+memory/
+memory_*/
+output/runs/
