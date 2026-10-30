@@ -53,6 +53,14 @@ python signalbrief_agent.py --memory-dir memory_demo --no-memory-write   # demo 
 
 The newsletter prints at the end and is saved to `output/newsletter_YYYY-MM-DD.md`. Memory lives in `memory/` (gitignored). Delete that folder to start fresh. Run the same topic twice to see memory at work: the second run skips stories the first one sent.
 
+### Web UI
+
+```bash
+python web_app.py        # open http://127.0.0.1:8000
+```
+
+A newspaper-style page: edit topics (name, kind, lookback days, why) and press **Run the presses**. The **Wire Room** terminal streams the full agent output live. When the run ends, **Today's Edition** shows the newsletter. Standard library only. The page runs `signalbrief_agent.py` on just the topics you entered (saved to `output/web_topics.json`), one run at a time, and stops the run if you close the tab.
+
 Topic format (`topics.json`): `name`, `kind` (`news`, `artist` or `research`, a hint for which tool fits), `query`, `days` (lookback window), `why` (why the reader cares).
 
 ## Architecture

@@ -1,0 +1,284 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The SignalBrief</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Libre+Baskerville:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f5f0e6; --ink: #1c1a17; --muted: #6b645a; --rule: #1c1a17;
+    --soft-rule: #c9bfae; --accent: #8a1c1c; --field: #fffdf8;
+    --term-bg: #151515; --term-ink: #d8d4cc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 16px/1.55 "Libre Baskerville", Georgia, serif;
+  }
+  .page { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+
+  /* Masthead */
+  .masthead { text-align: center; border-bottom: 4px double var(--rule); padding-bottom: 8px; }
+  .masthead h1 {
+    font: 900 clamp(2.4rem, 7vw, 4.6rem)/1 "Playfair Display", Georgia, serif;
+    margin: 0; letter-spacing: -0.01em;
+  }
+  .masthead .tag { font-style: italic; color: var(--muted); margin: 6px 0 0; }
+  .dateline {
+    display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    border-bottom: 1px solid var(--rule); padding: 6px 0; font-size: 0.8rem;
+    text-transform: uppercase; letter-spacing: 0.08em;
+  }
+
+  /* Layout */
+  .layout { display: grid; grid-template-columns: 380px 1fr; gap: 0; margin-top: 20px; }
+  .desk { padding-right: 24px; border-right: 1px solid var(--rule); min-width: 0; }
+  .front { padding-left: 28px; min-width: 0; }
+  @media (max-width: 860px) {
+    .layout { grid-template-columns: 1fr; }
+    .desk { padding-right: 0; border-right: 0; border-bottom: 1px solid var(--rule); padding-bottom: 20px; }
+    .front { padding-left: 0; padding-top: 20px; }
+  }
+  .kicker {
+    font: 700 0.75rem/1 "Libre Baskerville", serif; text-transform: uppercase;
+    letter-spacing: 0.14em; border-top: 3px solid var(--rule); border-bottom: 1px solid var(--rule);
+    padding: 6px 0; margin: 0 0 12px;
+  }
+
+  /* Topic form */
+  label.small { display: block; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 4px; }
+  input, select {
+    font: inherit; font-size: 0.9rem; color: var(--ink); background: var(--field);
+    border: 1px solid var(--soft-rule); padding: 6px 8px; width: 100%; min-width: 0;
+  }
+  input:focus, select:focus { outline: 2px solid var(--ink); outline-offset: -1px; }
+  .topic { border-bottom: 1px dotted var(--soft-rule); padding: 10px 0; }
+  .topic .row { display: grid; grid-template-columns: 1fr 96px 58px 30px; gap: 6px; }
+  .topic .why { margin-top: 6px; font-style: italic; }
+  .x { background: none; border: 0; font-size: 1.2rem; cursor: pointer; color: var(--muted); padding: 0; }
+  .x:hover { color: var(--accent); }
+  .controls { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+  button.btn {
+    font: 700 0.8rem/1 "Libre Baskerville", serif; text-transform: uppercase; letter-spacing: 0.1em;
+    padding: 10px 14px; cursor: pointer; border: 1px solid var(--ink); background: transparent; color: var(--ink);
+  }
+  button.btn.primary { background: var(--ink); color: var(--paper); }
+  button.btn:disabled { opacity: 0.5; cursor: wait; }
+  .check { font-size: 0.8rem; display: flex; gap: 6px; align-items: center; color: var(--muted); }
+  .check input { width: auto; }
+  .hint { font-size: 0.75rem; color: var(--muted); font-style: italic; margin: 8px 0 0; }
+
+  /* Terminal */
+  .terminal-wrap { margin-top: 24px; }
+  .terminal {
+    background: var(--term-bg); color: var(--term-ink); height: 360px; overflow: auto;
+    font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; padding: 10px 12px; margin: 0;
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .terminal .h { color: #f2c46d; font-weight: bold; }
+  .terminal .ok { color: #8fd18f; }
+  .terminal .err { color: #ff8a80; }
+  .terminal .dim { color: #8a857c; }
+  .status { font-size: 0.75rem; color: var(--muted); margin-top: 6px; }
+
+  /* Newsletter */
+  .paper h1 {
+    font: 900 clamp(1.8rem, 4vw, 2.6rem)/1.1 "Playfair Display", Georgia, serif;
+    margin: 0 0 8px; text-align: center;
+  }
+  .paper .lede { text-align: center; color: var(--muted); border-bottom: 1px solid var(--rule); padding-bottom: 12px; }
+  .paper .sections { column-width: 300px; column-gap: 32px; column-rule: 1px solid var(--soft-rule); margin-top: 16px; }
+  .paper section { break-inside: avoid; margin-bottom: 20px; }
+  .paper h2 {
+    font: 700 1.35rem/1.2 "Playfair Display", Georgia, serif; margin: 0;
+    border-top: 2px solid var(--rule); padding-top: 6px;
+  }
+  .paper sub { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 6px; }
+  .paper ul { padding-left: 18px; margin: 6px 0; }
+  .paper li { margin-bottom: 8px; }
+  .paper a { color: var(--accent); }
+  .paper p { margin: 6px 0; }
+  .paper .foot { border-top: 4px double var(--rule); margin-top: 12px; padding-top: 8px; font-size: 0.8rem; color: var(--muted); }
+  .empty { text-align: center; color: var(--muted); font-style: italic; padding: 60px 0; }
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <h1>The SignalBrief</h1>
+    <p class="tag">Every bullet cited. Nothing you've already read.</p>
+  </header>
+  <div class="dateline">
+    <span id="today"></span>
+    <span>Scout · Editor · Fact-checker</span>
+  </div>
+
+  <div class="layout">
+    <aside class="desk">
+      <h2 class="kicker">Assignment Desk</h2>
+      <label class="small" for="reader">Reader</label>
+      <input id="reader" placeholder="Your name">
+      <div id="topics"></div>
+      <div class="controls">
+        <button class="btn" id="add" type="button">+ Topic</button>
+        <button class="btn primary" id="run" type="button">Run the presses</button>
+        <label class="check"><input type="checkbox" id="nomem"> don't save to memory</label>
+      </div>
+      <p class="hint">Each topic costs three agent calls. Fewer topics and shorter lookback windows mean fewer tokens.</p>
+
+      <div class="terminal-wrap">
+        <h2 class="kicker">Wire Room</h2>
+        <pre class="terminal" id="term"><span class="dim">Agent output appears here when you run.</span></pre>
+        <div class="status" id="status">Idle.</div>
+      </div>
+    </aside>
+
+    <main class="front">
+      <h2 class="kicker">Today's Edition</h2>
+      <article class="paper" id="paper"><p class="empty">No edition yet. Set your topics and run the presses.</p></article>
+    </main>
+  </div>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+$("today").textContent = new Date().toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+
+// ---- Topics form ----
+function addTopic(t = {}) {
+  const div = document.createElement("div");
+  div.className = "topic";
+  div.innerHTML = `
+    <div class="row">
+      <input class="name" placeholder="Topic or search query">
+      <select class="kind"><option value="news">News</option><option value="artist">Artist</option><option value="research">Research</option></select>
+      <input class="days" type="number" min="1" max="60" title="Lookback (days)">
+      <button class="x" type="button" title="Remove">&times;</button>
+    </div>
+    <input class="why" placeholder="Why do you care? (optional)">`;
+  div.querySelector(".name").value = t.name || "";
+  div.querySelector(".kind").value = t.kind || "news";
+  div.querySelector(".days").value = t.days || 3;
+  div.querySelector(".why").value = t.why || "";
+  div.dataset.query = t.query && t.query !== t.name ? t.query : "";
+  div.querySelector(".name").addEventListener("input", () => { div.dataset.query = ""; });
+  div.querySelector(".x").onclick = () => div.remove();
+  $("topics").appendChild(div);
+}
+function readTopics() {
+  return [...document.querySelectorAll(".topic")].map((d) => ({
+    name: d.querySelector(".name").value.trim(),
+    query: d.dataset.query || d.querySelector(".name").value.trim(),
+    kind: d.querySelector(".kind").value,
+    days: Number(d.querySelector(".days").value) || 3,
+    why: d.querySelector(".why").value.trim(),
+  })).filter((t) => t.name);
+}
+$("add").onclick = () => addTopic();
+
+fetch("/api/topics").then((r) => r.json()).then((cfg) => {
+  $("reader").value = cfg.reader || "";
+  (cfg.topics || []).forEach(addTopic);
+}).catch(() => addTopic());
+
+// ---- Terminal ----
+const term = $("term");
+function lineClass(line) {
+  if (/^(===|\[result\]|\[handoff)/.test(line)) return "h";
+  if (/\[error\]|Traceback|Error:/.test(line)) return "err";
+  if (/SUPPORTED|^Saved /.test(line)) return "ok";
+  if (/^\[(trace|memory|react)/.test(line)) return "dim";
+  return "";
+}
+function writeLine(line) {
+  const atBottom = term.scrollHeight - term.scrollTop - term.clientHeight < 40;
+  const span = document.createElement("span");
+  const cls = lineClass(line);
+  if (cls) span.className = cls;
+  span.textContent = line + "\n";
+  term.appendChild(span);
+  if (atBottom) term.scrollTop = term.scrollHeight;
+}
+
+// ---- Minimal Markdown -> HTML for the newsletter format ----
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function inline(s) {
+  return esc(s)
+    .replace(/&lt;sub&gt;(.*?)&lt;\/sub&gt;/g, "<sub>$1</sub>")
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\*(.+?)\*/g, "<em>$1</em>");
+}
+function renderNewsletter(md) {
+  let html = "", inList = false, inSection = false, sectionsOpen = false;
+  const closeList = () => { if (inList) { html += "</ul>"; inList = false; } };
+  for (const raw of md.split("\n")) {
+    const line = raw.trimEnd();
+    if (line.startsWith("# ")) { html += `<h1>${inline(line.slice(2))}</h1><div class="lede">`; continue; }
+    if (line.startsWith("## ")) {
+      closeList();
+      if (!sectionsOpen) { html += `</div><div class="sections">`; sectionsOpen = true; }
+      if (inSection) html += "</section>";
+      html += `<section><h2>${inline(line.slice(3))}</h2>`; inSection = true; continue;
+    }
+    if (line === "---") {
+      closeList();
+      if (inSection) html += "</section>";
+      html += `</div><div class="foot">`; inSection = false; sectionsOpen = false; continue;
+    }
+    if (/^\s*[-*] /.test(line)) {
+      if (!inList) { html += "<ul>"; inList = true; }
+      html += `<li>${inline(line.replace(/^\s*[-*] /, ""))}</li>`; continue;
+    }
+    closeList();
+    if (line) html += `<p>${inline(line)}</p>`;
+  }
+  closeList();
+  if (inSection) html += "</section>";
+  html += "</div>";
+  return html;
+}
+async function loadNewsletter() {
+  const r = await fetch("/api/newsletter?t=" + Date.now());
+  if (r.ok) $("paper").innerHTML = renderNewsletter(await r.text());
+}
+loadNewsletter();
+
+// ---- Run ----
+$("run").onclick = async () => {
+  const topics = readTopics();
+  if (!topics.length) { $("status").textContent = "Add at least one topic."; return; }
+  $("run").disabled = true;
+  term.textContent = "";
+  $("status").textContent = `Running ${topics.length} topic(s)…`;
+  let saved = false;
+  try {
+    const res = await fetch("/api/run", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reader: $("reader").value.trim(), topics, no_memory_write: $("nomem").checked }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split("\n"); buf = lines.pop();
+      for (const l of lines) { writeLine(l); if (l.startsWith("Saved newsletter to")) saved = true; }
+    }
+    if (buf) writeLine(buf);
+    if (saved) { await loadNewsletter(); $("status").textContent = "Done. Today's edition is printed."; }
+    else $("status").textContent = "Run ended without a newsletter. Check the wire room for errors.";
+  } catch (e) {
+    writeLine("[error] " + e.message);
+    $("status").textContent = "Run failed.";
+  } finally {
+    $("run").disabled = false;
+  }
+};
+</script>
+</body>
+</html>

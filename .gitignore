@@ -8,3 +8,4 @@ output/mcp_server.log
 memory/
 memory_*/
 output/runs/
+output/web_topics.json
