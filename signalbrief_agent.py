@@ -464,6 +464,7 @@ async def main():
                         help="where the ChromaDB coverage memory lives")
     parser.add_argument("--no-memory-write", action="store_true",
                         help="read memory but don't record this run (for demos/tests)")
+    parser.add_argument("--output", help="newsletter path (default: output/newsletter_<date>.md)")
     args = parser.parse_args()
 
     config = json.loads(Path(args.topics).read_text(encoding="utf-8"))
@@ -478,7 +479,9 @@ async def main():
 
     newsletter = render_newsletter(sections, reader)
     OUTPUT_DIR.mkdir(exist_ok=True)
-    out_path = OUTPUT_DIR / f"newsletter_{date.today().isoformat()}.md"
+    out_path = (Path(args.output) if args.output
+                else OUTPUT_DIR / f"newsletter_{date.today().isoformat()}.md")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(newsletter, encoding="utf-8")
     runs_dir = OUTPUT_DIR / "runs"
     runs_dir.mkdir(exist_ok=True)

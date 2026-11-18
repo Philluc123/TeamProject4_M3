@@ -1,3 +1,14 @@
+---
+title: SignalBrief
+emoji: 📰
+colorFrom: gray
+colorTo: red
+sdk: docker
+app_port: 7860
+pinned: false
+short_description: Personal daily newsletter, every bullet cited
+---
+
 # SignalBrief — Team Project 4, M3 Multi-Agent System
 
 **Problem:** people who follow a few niche interests either check several sites every day or trust AI summaries that can't show where a claim came from.
