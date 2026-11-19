@@ -234,6 +234,28 @@ def test_o8_budget():
           "budget spent -> source + memory tools hidden by the MCP tool filter")
 
 
+def test_o11_kind_filter():
+    """M4: the tool filter only shows source tools that fit the topic kind."""
+    names = ["recall_coverage", "search_news", "search_research_papers", "get_artist_releases"]
+    def visible(budget):
+        ctx = SimpleNamespace(run_context=SimpleNamespace(context=budget))
+        return [n for n in names if budget_tool_filter(ctx, SimpleNamespace(name=n))]
+    news, artist, research = ToolBudget(kind="news"), ToolBudget(kind="artist"), ToolBudget(kind="research")
+    research_before = visible(research)
+    research.record("search_research_papers")
+    research_after = visible(research)
+    got = {"news": visible(news), "artist": visible(artist),
+           "research_before": research_before, "research_after": research_after,
+           "no_kind": visible(ToolBudget())}
+    print("  O11 visible:", got)
+    ok = (got["news"] == ["recall_coverage", "search_news"]
+          and got["artist"] == ["recall_coverage", "search_news", "get_artist_releases"]
+          and got["research_before"] == ["recall_coverage", "search_research_papers"]
+          and got["research_after"] == ["recall_coverage", "search_news", "search_research_papers"]
+          and got["no_kind"] == names)
+    check("O11", ok, "kind filter: news -> news only; artist -> artist + news; research -> PubMed first, then news")
+
+
 def test_o9_react_trace():
     wrapped = json.dumps({"type": "text", "text": json.dumps({"articles": [{}, {}]})})
     steps = [("thought", "Check memory first."),
@@ -360,7 +382,7 @@ def main():
     for test in (test_o1_news_parser, test_o2_music_parser, test_o3_pubmed_parser,
                  test_o4_guardrail, test_o5_memory, test_o6_handoff_packet,
                  test_o7_factcheck, test_o8_budget, test_o9_react_trace,
-                 test_o10_verdict_consistency):
+                 test_o10_verdict_consistency, test_o11_kind_filter):
         test()
     if args.live or args.case:
         print("\nLive test cases (3-agent pipeline, real tools + NRP model)")

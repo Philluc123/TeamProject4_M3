@@ -287,7 +287,7 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
         f"Why the reader cares: {topic.get('why', 'not specified')}\n"
         "Research this topic now."
     )
-    budget = ToolBudget()
+    budget = ToolBudget(kind=topic.get("kind"))  # hides tools that don't fit the topic kind
     try:
         scout_result = await Runner.run(scout, prompt, context=budget, hooks=BudgetHooks(),
                                         max_turns=10)

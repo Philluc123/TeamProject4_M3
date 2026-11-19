@@ -60,6 +60,12 @@
       "name": "Self-contradicting 'supported' verdict is overridden",
       "input": "3 verdicts marked 'supported': (0) reasoning says 'top-selling track of the week - not mentioned in the source' (the live L6 failure); (1) claim list has one claim with in_source=false; (2) all claims in_source=true.",
       "expected_output": "Effective verdicts: overstated, overstated, supported. Bullets 0 and 1 are dropped (no rewrite offered); bullet 2 is kept; stats overridden = 2."
+    },
+    {
+      "id": "O11",
+      "name": "Tool filter enforces the kind-to-tool rule (M4)",
+      "input": "ToolBudget(kind=news / artist / research / none); research budget checked before and after one search_research_papers call",
+      "expected_output": "news: recall_coverage + search_news only; artist: recall_coverage + search_news + get_artist_releases; research: recall_coverage + search_research_papers, then search_news appears only after a paper search; no kind: every tool (old behaviour)."
     }
   ],
   "live": [
