@@ -426,7 +426,10 @@ async def run(topics: list[dict], reader: str, memory_dir: Path, write_memory: b
     print(f"[memory] {memory.count()} items remembered in {memory_dir}")
     news_server = MCPServerStdio(
         name="SignalBrief Sources",
-        params=MCPServerStdioParams(command=sys.executable, args=[str(NEWS_SERVER)]),
+        # pass the full env: the MCP client otherwise forwards only a few system vars,
+        # and the eval's fault-injection switch (SIGNALBRIEF_FAULT) must reach the server
+        params=MCPServerStdioParams(command=sys.executable, args=[str(NEWS_SERVER)],
+                                    env=dict(os.environ)),
         client_session_timeout_seconds=90,
         cache_tools_list=True,
         tool_filter=budget_tool_filter,
