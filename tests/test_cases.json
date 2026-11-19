@@ -41,7 +41,7 @@
       "id": "O7",
       "name": "Handoff 2 + fact-check verdicts are applied in code",
       "input": "4 Editor bullets (one written without a '- ' marker) and a FactCheckReport: id0 supported, id1 overstated with a revision that lost its [ref], id2 unsupported, id3 no verdict.",
-      "expected_output": "split_bullets keeps the dash-less line; the request attaches each bullet's cited records; result keeps 3 bullets: original id0, revised id1 with its ref restored, id3 kept as unchecked; id2 dropped; stats supported 1 / overstated 1 / unsupported 1 / unchecked 1."
+      "expected_output": "split_bullets keeps the dash-less line; the request attaches each bullet's cited records; result keeps 2 bullets: original id0 and revised id1 with its ref restored; id2 (unsupported) and id3 (no verdict) are left out; stats supported 1 / overstated 1 / unsupported 1 / unchecked 0 / dropped_unchecked 1. (M4: before, id3 was published as unchecked.)"
     },
     {
       "id": "O8",

@@ -184,14 +184,14 @@ def test_o7_factcheck():
     ok = (len(bullets) == 4
           and [len(i["cited_sources"]) for i in request["items"]] == [1, 1, 1, 1]
           and request["items"][1]["cited_sources"][0]["title"].startswith("Xfer")
-          and len(kept) == 3
+          and len(kept) == 2
           and kept[0] == bullets[0]
           and kept[1] == f"- **Serum 2.** Xfer released a Serum 2 update. [{s}]"
           and "tinnitus" not in " ".join(kept)
-          and kept[2] == bullets[3]
-          and stats == {"supported": 1, "overstated": 1, "unsupported": 1, "unchecked": 1,
-                        "overridden": 0})
-    check("O7", ok, "supported kept, overstated revised (ref restored), unsupported dropped, missing = unchecked")
+          and bullets[3] not in kept  # M4: a bullet with no verdict is left out, not published
+          and stats == {"supported": 1, "overstated": 1, "unsupported": 1, "unchecked": 0,
+                        "dropped_unchecked": 1, "overridden": 0})
+    check("O7", ok, "supported kept, overstated revised (ref restored), unsupported dropped, missing verdict -> left out")
 
 
 def test_o10_verdict_consistency():

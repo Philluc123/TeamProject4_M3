@@ -389,12 +389,21 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
                                           max_turns=2)
         usage["checker"] = usage_of(checker_result)
         report = checker_result.final_output
+        # M4: in the baseline the checker once returned 1 verdict for 4 bullets (E1 run 3)
+        # and the other 3 were published unchecked. Ask once more for the missing ids.
+        missing = [i for i in range(len(bullets)) if i not in {v.id for v in report.verdicts}]
+        if missing:
+            print(f"[check] no verdict for bullet(s) {missing} -> asking the checker again for those")
+            again = {**request, "items": [it for it in request["items"] if it["id"] in missing]}
+            retry = await Runner.run(checker, json.dumps(again, ensure_ascii=False), max_turns=2)
+            usage["checker_retry"] = usage_of(retry)
+            report.verdicts += [v for v in retry.final_output.verdicts if v.id in missing]
         for v in report.verdicts:
             verdict, override = effective_verdict(v)
             note = f" (model said {v.verdict.upper()}; overridden: {override})" if override else ""
             print(f"[check {v.id}] {verdict.upper()}{note}: {v.reasoning[:160]}")
     except Exception as exc:
-        print(f"[error] Fact-checker failed on '{topic['name']}': {exc} (bullets kept as unchecked)")
+        print(f"[error] Fact-checker failed on '{topic['name']}': {exc} (unchecked bullets are left out)")
     kept, fc_stats = apply_verdicts(bullets, report)
 
     # ---- Citation guardrail (code): only refs from this topic's packet can be linked
@@ -422,7 +431,7 @@ def render_newsletter(sections: list[dict], reader: str) -> str:
     kept = sum(s["stats"]["kept"] for s in sections)
     guard = sum(s["stats"]["dropped"] for s in sections)
     fc = {k: sum(s.get("factcheck", {}).get(k, 0) for s in sections)
-          for k in ("overstated", "unsupported", "unchecked")}
+          for k in ("overstated", "unsupported", "unchecked", "dropped_unchecked")}
     repeats = sum(len(s.get("packet", {}).get("already_covered", [])) for s in sections)
     active = [s["topic"]["name"] for s in sections if s["stats"]["kept"]]
     lines = [
@@ -440,7 +449,7 @@ def render_newsletter(sections: list[dict], reader: str) -> str:
         "---",
         f"*Verification: {kept} bullets linked to sources returned by live tools this run. "
         f"Fact-checker rewrote {fc['overstated']} overstated and removed {fc['unsupported']} "
-        f"unsupported bullet(s); {fc['unchecked']} could not be checked. Citation guardrail "
+        f"unsupported bullet(s); {fc['dropped_unchecked']} could not be checked and were left out. Citation guardrail "
         f"removed {guard} more. {repeats} story(ies) skipped because you already got them. "
         "Summaries are AI-generated from headlines - open the source before relying on them.*",
     ]

@@ -274,12 +274,15 @@ def effective_verdict(v: Verdict) -> tuple[str, str]:
 def apply_verdicts(bullets: list[str], report: FactCheckReport | None) -> tuple[list[str], dict]:
     """Keep supported bullets, swap in revisions for overstated ones, drop unsupported.
 
-    A bullet with no verdict (checker failed or skipped it) is kept but counted
-    as `unchecked`, and the newsletter footer says so. A "supported" verdict that
-    contradicts the checker's own reasoning is treated as overstated (counted in
-    `overridden`); with no rewrite offered, that bullet is dropped.
+    A bullet with no verdict (checker failed or skipped it, even after the retry
+    in signalbrief_agent) is left out and counted in `dropped_unchecked` (M4: in M3
+    it was published and counted as `unchecked`; `unchecked` = bullets published
+    without a verdict, now always 0). A "supported" verdict that contradicts the
+    checker's own reasoning is treated as overstated (counted in `overridden`);
+    with no rewrite offered, that bullet is dropped.
     """
-    stats = {"supported": 0, "overstated": 0, "unsupported": 0, "unchecked": 0, "overridden": 0}
+    stats = {"supported": 0, "overstated": 0, "unsupported": 0, "unchecked": 0,
+             "dropped_unchecked": 0, "overridden": 0}
     verdicts = {v.id: v for v in (report.verdicts if report else [])}
     kept = []
     for i, b in enumerate(bullets):
@@ -288,8 +291,7 @@ def apply_verdicts(bullets: list[str], report: FactCheckReport | None) -> tuple[
         if override:
             stats["overridden"] += 1
         if v is None:
-            stats["unchecked"] += 1
-            kept.append(b)
+            stats["dropped_unchecked"] += 1  # never publish a bullet nobody checked
         elif verdict == "supported":
             stats["supported"] += 1
             kept.append(b)
