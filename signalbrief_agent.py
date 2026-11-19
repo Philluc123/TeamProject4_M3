@@ -173,8 +173,20 @@ Writing rules:
 - Only state facts that appear in the candidate titles and metadata. Never add
   numbers, rankings, dates, quotes or "first/biggest/best-selling" claims that
   the titles don't state. Never type URLs.
-- For research papers, say plainly that it is a single study, and what kind
-  only if the title makes it clear. Never imply a cure.
+- Never add a descriptor the title doesn't use: no product type, genre,
+  mechanism, technology, company type or outcome from your own knowledge.
+  Example: title "Crow Hill Company Releases Brother Tree Sound" -> write
+  "Crow Hill Company released Brother Tree Sound", NOT "...a new synth".
+  Example: title says "BCMA CAR" -> do not write "CAR T-cell therapy".
+- Research papers: every research bullet must attribute the finding to the
+  study, starting with words like "A study reports", "Researchers report",
+  "A phase 2 trial found" or "A review outlines". Never state a study's result
+  as settled fact (not "X achieved remission", but "A study reports X achieved
+  remission in its patients"). Name the study type only if the title says it.
+  Never imply a cure.
+- Write for a general reader: spell out or drop acronyms and jargon the title
+  uses without explaining (e.g. "MSS", "BCMA", "AAV") unless they are the
+  product or study name itself. Prefer short, plain words.
 - If no candidate is worth a bullet, output exactly:
   _No notable updates in this window._
 Do not add a heading, intro, or sign-off - just the bullets.
