@@ -299,17 +299,24 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
     steps, outputs, tools_called = read_scout_items(scout_result)
     final = str(scout_result.final_output).strip()
     retried = False
+    sources = sources_from_tool_outputs(outputs)
     if outputs and final != "NONE" and not REF_PATTERN.search(final):
         # Seen in testing: once the budget hides every tool, gpt-oss sometimes
         # "wants" another tool and ends with an empty answer. One retry, no tools.
+        # M4: the retry gets a compact list of the records the tools returned instead of
+        # the whole conversation (every raw tool result again, long Google News links
+        # included); in the M4 baseline the Scout retried 2-3 times per E9 newsletter.
         print("[scout] empty/invalid final answer after tool budget -> one retry without tools")
         retried = True
+        records = "\n".join(f"- [{r['ref']}] {r.get('title', '')} | {r.get('source', '')} | "
+                            f"{r.get('published', '')}" for r in sources.values())
         try:
             retry = await Runner.run(
                 scout.clone(mcp_servers=[]),
-                scout_result.to_input_list() + [{"role": "user", "content": (
-                    "Your tool budget is spent. Using ONLY the tool results above, give your "
-                    "final answer now in the required format (- [ref] why), or NONE.")}],
+                f"{prompt}\n\nYour tool budget is spent. These are the records your tools "
+                f"returned (ref | title | source | published):\n{records or '(none)'}\n\n"
+                "Using ONLY these records, give your final answer now in the required "
+                "format (- [ref] why), or NONE.",
                 max_turns=1)
             usage["scout_retry"] = usage_of(retry)
             final = str(retry.final_output).strip()
@@ -321,7 +328,6 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
         for key in ("thought", "action", "observation", "answer"):
             if key in step:
                 print(f"[react {i}] {key.upper()}: {step[key][:160]}")
-    sources = sources_from_tool_outputs(outputs)
 
     # ---- HANDOFF 1: Scout -> Editor (payload built in code from real tool records)
     packet = build_research_packet(
