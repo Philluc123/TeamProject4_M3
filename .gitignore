@@ -10,3 +10,6 @@ memory_*/
 output/runs/
 output/web_topics.json
 output/web/
+
+# Office lock files
+~$*
