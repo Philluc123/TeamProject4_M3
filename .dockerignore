@@ -1,10 +1,16 @@
+# Docker drops a trailing "/", so "memory_*/" would also skip memory_store.py.
+# List data folders by exact name instead.
 .env
 .git
-venv/
-.venv/
-__pycache__/
+venv
+.venv
+__pycache__
+**/__pycache__
 *.pyc
-memory/
-memory_*/
-output/
+memory
+memory_demo
+memory_web
+memory_test
+output
+eval
 M3_report_context.md

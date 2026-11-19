@@ -1,0 +1,15 @@
+# Files never uploaded to Google Cloud Build (same as .dockerignore). Keep .env out: the
+# NRP key is set on the Cloud Run service as an environment variable instead.
+.gcloudignore
+.env
+.git
+.gitignore
+venv/
+.venv/
+__pycache__/
+*.pyc
+memory/
+memory_*/
+output/
+eval/
+M3_report_context.md

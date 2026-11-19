@@ -84,8 +84,16 @@ def busy_message() -> str:
 
 
 class Handler(BaseHTTPRequestHandler):
+    # HTTP/1.1 so the live run output can use chunked encoding: proxies such as Cloud Run
+    # and Cloudflare pass chunks through as they arrive.
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, *args):  # keep the server console quiet
         pass
+
+    def chunk(self, data: bytes) -> None:
+        self.wfile.write(f"{len(data):X}\r\n".encode() + data + b"\r\n")
+        self.wfile.flush()
 
     def send(self, code: int, body: bytes, ctype: str, headers: dict | None = None):
         self.send_response(code)
@@ -170,23 +178,26 @@ class Handler(BaseHTTPRequestHandler):
             print(f"[web] {time.strftime('%H:%M')} run for {reader!r}: "
                   + ", ".join(t["name"] for t in topics), flush=True)
 
-            # HTTP/1.0 response with no Content-Length: the stream ends when we close.
-            # text/event-stream + no-cache keeps Cloudflare from buffering the live output.
+            # Chunked stream; text/event-stream + no-cache keeps proxies from buffering it.
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-cache, no-transform")
             self.send_header("X-Accel-Buffering", "no")
+            self.send_header("Transfer-Encoding", "chunked")
+            self.send_header("Connection", "close")
             self.end_headers()
+            self.close_connection = True
             # UTF-8 child output on Windows too (a pipe would otherwise default to cp1252)
             env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
             proc = subprocess.Popen(cmd, cwd=HERE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                     text=True, encoding="utf-8", errors="replace", bufsize=1, env=env)
             try:
                 for line in proc.stdout:
-                    self.wfile.write(line.encode("utf-8"))
-                    self.wfile.flush()
+                    self.chunk(line.encode("utf-8"))
                 code = proc.wait()
-                self.wfile.write(f"\n[web] pipeline exited with code {code}\n".encode())
+                self.chunk(f"\n[web] pipeline exited with code {code}\n".encode())
+                self.wfile.write(b"0\r\n\r\n")  # end of chunked body
+                self.wfile.flush()
                 print(f"[web] {time.strftime('%H:%M')} run for {reader!r} finished (code {code})",
                       flush=True)
             except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
