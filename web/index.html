@@ -118,15 +118,15 @@
   <div class="layout">
     <aside class="desk">
       <h2 class="kicker">Assignment Desk</h2>
-      <label class="small" for="reader">Reader</label>
-      <input id="reader" placeholder="Your name">
+      <label class="small" for="reader">Your name</label>
+      <input id="reader" placeholder="So your news stays separate from other testers'" autocomplete="given-name">
       <div id="topics"></div>
       <div class="controls">
         <button class="btn" id="add" type="button">+ Topic</button>
         <button class="btn primary" id="run" type="button">Run the presses</button>
-        <label class="check"><input type="checkbox" id="nomem"> don't save to memory</label>
+        <label class="check"><input type="checkbox" id="nomem"> don't remember this run</label>
       </div>
-      <p class="hint">Each topic costs three agent calls. Fewer topics and shorter lookback windows mean fewer tokens.</p>
+      <p class="hint">Up to <span id="maxt">3</span> topics. Each one takes about 1–2 minutes, so keep this tab open while it runs. Closing it stops the run.</p>
 
       <div class="terminal-wrap">
         <h2 class="kicker">Wire Room</h2>
@@ -164,8 +164,15 @@ function addTopic(t = {}) {
   div.querySelector(".why").value = t.why || "";
   div.dataset.query = t.query && t.query !== t.name ? t.query : "";
   div.querySelector(".name").addEventListener("input", () => { div.dataset.query = ""; });
-  div.querySelector(".x").onclick = () => div.remove();
+  div.querySelector(".x").onclick = () => { div.remove(); updateAdd(); };
   $("topics").appendChild(div);
+  updateAdd();
+}
+let maxTopics = 3;
+function updateAdd() {
+  const full = document.querySelectorAll(".topic").length >= maxTopics;
+  $("add").disabled = full;
+  $("add").title = full ? `Up to ${maxTopics} topics per run` : "";
 }
 function readTopics() {
   return [...document.querySelectorAll(".topic")].map((d) => ({
@@ -179,9 +186,17 @@ function readTopics() {
 $("add").onclick = () => addTopic();
 
 fetch("/api/topics").then((r) => r.json()).then((cfg) => {
-  $("reader").value = cfg.reader || "";
-  (cfg.topics || []).forEach(addTopic);
+  maxTopics = cfg.max_topics || maxTopics;
+  $("maxt").textContent = maxTopics;
+  (cfg.topics || []).slice(0, maxTopics).forEach(addTopic);
 }).catch(() => addTopic());
+
+// Remember the tester's name on this device only (works fine without storage)
+try { $("reader").value = localStorage.getItem("signalbrief-reader") || ""; } catch (e) {}
+$("reader").addEventListener("change", () => {
+  try { localStorage.setItem("signalbrief-reader", $("reader").value.trim()); } catch (e) {}
+  loadNewsletter();
+});
 
 // ---- Terminal ----
 const term = $("term");
@@ -240,25 +255,37 @@ function renderNewsletter(md) {
   html += "</div>";
   return html;
 }
+const EMPTY = '<p class="empty">No edition yet. Type your name, set your topics and run the presses.</p>';
 async function loadNewsletter() {
-  const r = await fetch("/api/newsletter?t=" + Date.now());
-  if (r.ok) $("paper").innerHTML = renderNewsletter(await r.text());
+  const reader = $("reader").value.trim();
+  if (!reader) { $("paper").innerHTML = EMPTY; return; }
+  const r = await fetch("/api/newsletter?reader=" + encodeURIComponent(reader) + "&t=" + Date.now());
+  $("paper").innerHTML = r.ok ? renderNewsletter(await r.text()) : EMPTY;
 }
 loadNewsletter();
 
 // ---- Run ----
 $("run").onclick = async () => {
   const topics = readTopics();
+  const readerName = $("reader").value.trim();
+  if (!readerName) { $("status").textContent = "Please type your name first."; $("reader").focus(); return; }
   if (!topics.length) { $("status").textContent = "Add at least one topic."; return; }
+  try { localStorage.setItem("signalbrief-reader", readerName); } catch (e) {}
   $("run").disabled = true;
   term.textContent = "";
-  $("status").textContent = `Running ${topics.length} topic(s)…`;
+  const n = topics.length;
+  $("status").textContent = `Working on ${n} topic${n > 1 ? "s" : ""}. This takes about ${n * 2} minute${n * 2 > 1 ? "s" : ""}. Keep this tab open.`;
   let saved = false;
   try {
     const res = await fetch("/api/run", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ reader: $("reader").value.trim(), topics, no_memory_write: $("nomem").checked }),
+      body: JSON.stringify({ reader: readerName, topics, no_memory_write: $("nomem").checked }),
     });
+    if (res.status === 409 || res.status === 400) {  // busy, or missing name/topics: not an error
+      $("status").textContent = await res.text();
+      term.innerHTML = '<span class="dim">Nothing ran.</span>';
+      return;
+    }
     if (!res.ok) throw new Error(await res.text());
     const reader = res.body.getReader(), dec = new TextDecoder();
     let buf = "";
@@ -271,10 +298,10 @@ $("run").onclick = async () => {
     }
     if (buf) writeLine(buf);
     if (saved) { await loadNewsletter(); $("status").textContent = "Done. Today's edition is printed."; }
-    else $("status").textContent = "Run ended without a newsletter. Check the wire room for errors.";
+    else $("status").textContent = "Something went wrong and no edition was printed. Please tell the SignalBrief team.";
   } catch (e) {
     writeLine("[error] " + e.message);
-    $("status").textContent = "Run failed.";
+    $("status").textContent = "Lost the connection. Check your internet and try again.";
   } finally {
     $("run").disabled = false;
   }

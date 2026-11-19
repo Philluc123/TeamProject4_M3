@@ -184,14 +184,14 @@ def test_o7_factcheck():
     ok = (len(bullets) == 4
           and [len(i["cited_sources"]) for i in request["items"]] == [1, 1, 1, 1]
           and request["items"][1]["cited_sources"][0]["title"].startswith("Xfer")
-          and len(kept) == 3
+          and len(kept) == 2
           and kept[0] == bullets[0]
           and kept[1] == f"- **Serum 2.** Xfer released a Serum 2 update. [{s}]"
           and "tinnitus" not in " ".join(kept)
-          and kept[2] == bullets[3]
-          and stats == {"supported": 1, "overstated": 1, "unsupported": 1, "unchecked": 1,
-                        "overridden": 0})
-    check("O7", ok, "supported kept, overstated revised (ref restored), unsupported dropped, missing = unchecked")
+          and bullets[3] not in kept  # M4: a bullet with no verdict is left out, not published
+          and stats == {"supported": 1, "overstated": 1, "unsupported": 1, "unchecked": 0,
+                        "dropped_unchecked": 1, "overridden": 0})
+    check("O7", ok, "supported kept, overstated revised (ref restored), unsupported dropped, missing verdict -> left out")
 
 
 def test_o10_verdict_consistency():
@@ -232,6 +232,28 @@ def test_o8_budget():
     print("  O8 visible before:", before, "after:", after)
     check("O8", before == names and after == ["some_other_tool"],
           "budget spent -> source + memory tools hidden by the MCP tool filter")
+
+
+def test_o11_kind_filter():
+    """M4: the tool filter only shows source tools that fit the topic kind."""
+    names = ["recall_coverage", "search_news", "search_research_papers", "get_artist_releases"]
+    def visible(budget):
+        ctx = SimpleNamespace(run_context=SimpleNamespace(context=budget))
+        return [n for n in names if budget_tool_filter(ctx, SimpleNamespace(name=n))]
+    news, artist, research = ToolBudget(kind="news"), ToolBudget(kind="artist"), ToolBudget(kind="research")
+    research_before = visible(research)
+    research.record("search_research_papers")
+    research_after = visible(research)
+    got = {"news": visible(news), "artist": visible(artist),
+           "research_before": research_before, "research_after": research_after,
+           "no_kind": visible(ToolBudget())}
+    print("  O11 visible:", got)
+    ok = (got["news"] == ["recall_coverage", "search_news"]
+          and got["artist"] == ["recall_coverage", "search_news", "get_artist_releases"]
+          and got["research_before"] == ["recall_coverage", "search_research_papers"]
+          and got["research_after"] == ["recall_coverage", "search_news", "search_research_papers"]
+          and got["no_kind"] == names)
+    check("O11", ok, "kind filter: news -> news only; artist -> artist + news; research -> PubMed first, then news")
 
 
 def test_o9_react_trace():
@@ -360,7 +382,7 @@ def main():
     for test in (test_o1_news_parser, test_o2_music_parser, test_o3_pubmed_parser,
                  test_o4_guardrail, test_o5_memory, test_o6_handoff_packet,
                  test_o7_factcheck, test_o8_budget, test_o9_react_trace,
-                 test_o10_verdict_consistency):
+                 test_o10_verdict_consistency, test_o11_kind_filter):
         test()
     if args.live or args.case:
         print("\nLive test cases (3-agent pipeline, real tools + NRP model)")

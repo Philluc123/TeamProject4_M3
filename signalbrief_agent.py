@@ -173,8 +173,20 @@ Writing rules:
 - Only state facts that appear in the candidate titles and metadata. Never add
   numbers, rankings, dates, quotes or "first/biggest/best-selling" claims that
   the titles don't state. Never type URLs.
-- For research papers, say plainly that it is a single study, and what kind
-  only if the title makes it clear. Never imply a cure.
+- Never add a descriptor the title doesn't use: no product type, genre,
+  mechanism, technology, company type or outcome from your own knowledge.
+  Example: title "Crow Hill Company Releases Brother Tree Sound" -> write
+  "Crow Hill Company released Brother Tree Sound", NOT "...a new synth".
+  Example: title says "BCMA CAR" -> do not write "CAR T-cell therapy".
+- Research papers: every research bullet must attribute the finding to the
+  study, starting with words like "A study reports", "Researchers report",
+  "A phase 2 trial found" or "A review outlines". Never state a study's result
+  as settled fact (not "X achieved remission", but "A study reports X achieved
+  remission in its patients"). Name the study type only if the title says it.
+  Never imply a cure.
+- Write for a general reader: spell out or drop acronyms and jargon the title
+  uses without explaining (e.g. "MSS", "BCMA", "AAV") unless they are the
+  product or study name itself. Prefer short, plain words.
 - If no candidate is worth a bullet, output exactly:
   _No notable updates in this window._
 Do not add a heading, intro, or sign-off - just the bullets.
@@ -198,8 +210,16 @@ For EACH item, think step by step:
        sources don't state. Write `revised_bullet`: the same bullet with the
        unsupported detail removed, same format, keeping its [ref] ids.
      - "unsupported": the main claim is not in the cited sources.
-Return one verdict per item id. Be strict about invented specifics; do not
-penalize plain-English paraphrase.
+Count as a claim, and check against the headline, every descriptor the bullet
+adds: product type ("synth", "VST"), genre, mechanism ("T-cell"), company type
+("startup"), audience ("indie") or outcome ("remission"). A descriptor the
+headline doesn't state or directly imply is NOT in_source -> "overstated".
+Research sources (type research or a PubMed paper): a bullet that states the
+study's result as settled fact, without attributing it ("A study reports",
+"Researchers report", "A trial found", ...), is "overstated"; its
+revised_bullet adds the attribution.
+Return one verdict for EVERY item id you received - never skip one. Be strict
+about invented specifics; do not penalize plain-English paraphrase.
 """.strip()
 
 
@@ -287,7 +307,7 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
         f"Why the reader cares: {topic.get('why', 'not specified')}\n"
         "Research this topic now."
     )
-    budget = ToolBudget()
+    budget = ToolBudget(kind=topic.get("kind"))  # hides tools that don't fit the topic kind
     try:
         scout_result = await Runner.run(scout, prompt, context=budget, hooks=BudgetHooks(),
                                         max_turns=10)
@@ -299,17 +319,24 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
     steps, outputs, tools_called = read_scout_items(scout_result)
     final = str(scout_result.final_output).strip()
     retried = False
+    sources = sources_from_tool_outputs(outputs)
     if outputs and final != "NONE" and not REF_PATTERN.search(final):
         # Seen in testing: once the budget hides every tool, gpt-oss sometimes
         # "wants" another tool and ends with an empty answer. One retry, no tools.
+        # M4: the retry gets a compact list of the records the tools returned instead of
+        # the whole conversation (every raw tool result again, long Google News links
+        # included); in the M4 baseline the Scout retried 2-3 times per E9 newsletter.
         print("[scout] empty/invalid final answer after tool budget -> one retry without tools")
         retried = True
+        records = "\n".join(f"- [{r['ref']}] {r.get('title', '')} | {r.get('source', '')} | "
+                            f"{r.get('published', '')}" for r in sources.values())
         try:
             retry = await Runner.run(
                 scout.clone(mcp_servers=[]),
-                scout_result.to_input_list() + [{"role": "user", "content": (
-                    "Your tool budget is spent. Using ONLY the tool results above, give your "
-                    "final answer now in the required format (- [ref] why), or NONE.")}],
+                f"{prompt}\n\nYour tool budget is spent. These are the records your tools "
+                f"returned (ref | title | source | published):\n{records or '(none)'}\n\n"
+                "Using ONLY these records, give your final answer now in the required "
+                "format (- [ref] why), or NONE.",
                 max_turns=1)
             usage["scout_retry"] = usage_of(retry)
             final = str(retry.final_output).strip()
@@ -321,7 +348,6 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
         for key in ("thought", "action", "observation", "answer"):
             if key in step:
                 print(f"[react {i}] {key.upper()}: {step[key][:160]}")
-    sources = sources_from_tool_outputs(outputs)
 
     # ---- HANDOFF 1: Scout -> Editor (payload built in code from real tool records)
     packet = build_research_packet(
@@ -363,12 +389,21 @@ async def brief_topic(agents: tuple[Agent, Agent, Agent], topic: dict,
                                           max_turns=2)
         usage["checker"] = usage_of(checker_result)
         report = checker_result.final_output
+        # M4: in the baseline the checker once returned 1 verdict for 4 bullets (E1 run 3)
+        # and the other 3 were published unchecked. Ask once more for the missing ids.
+        missing = [i for i in range(len(bullets)) if i not in {v.id for v in report.verdicts}]
+        if missing:
+            print(f"[check] no verdict for bullet(s) {missing} -> asking the checker again for those")
+            again = {**request, "items": [it for it in request["items"] if it["id"] in missing]}
+            retry = await Runner.run(checker, json.dumps(again, ensure_ascii=False), max_turns=2)
+            usage["checker_retry"] = usage_of(retry)
+            report.verdicts += [v for v in retry.final_output.verdicts if v.id in missing]
         for v in report.verdicts:
             verdict, override = effective_verdict(v)
             note = f" (model said {v.verdict.upper()}; overridden: {override})" if override else ""
             print(f"[check {v.id}] {verdict.upper()}{note}: {v.reasoning[:160]}")
     except Exception as exc:
-        print(f"[error] Fact-checker failed on '{topic['name']}': {exc} (bullets kept as unchecked)")
+        print(f"[error] Fact-checker failed on '{topic['name']}': {exc} (unchecked bullets are left out)")
     kept, fc_stats = apply_verdicts(bullets, report)
 
     # ---- Citation guardrail (code): only refs from this topic's packet can be linked
@@ -396,7 +431,7 @@ def render_newsletter(sections: list[dict], reader: str) -> str:
     kept = sum(s["stats"]["kept"] for s in sections)
     guard = sum(s["stats"]["dropped"] for s in sections)
     fc = {k: sum(s.get("factcheck", {}).get(k, 0) for s in sections)
-          for k in ("overstated", "unsupported", "unchecked")}
+          for k in ("overstated", "unsupported", "unchecked", "dropped_unchecked")}
     repeats = sum(len(s.get("packet", {}).get("already_covered", [])) for s in sections)
     active = [s["topic"]["name"] for s in sections if s["stats"]["kept"]]
     lines = [
@@ -414,7 +449,7 @@ def render_newsletter(sections: list[dict], reader: str) -> str:
         "---",
         f"*Verification: {kept} bullets linked to sources returned by live tools this run. "
         f"Fact-checker rewrote {fc['overstated']} overstated and removed {fc['unsupported']} "
-        f"unsupported bullet(s); {fc['unchecked']} could not be checked. Citation guardrail "
+        f"unsupported bullet(s); {fc['dropped_unchecked']} could not be checked and were left out. Citation guardrail "
         f"removed {guard} more. {repeats} story(ies) skipped because you already got them. "
         "Summaries are AI-generated from headlines - open the source before relying on them.*",
     ]
@@ -426,7 +461,10 @@ async def run(topics: list[dict], reader: str, memory_dir: Path, write_memory: b
     print(f"[memory] {memory.count()} items remembered in {memory_dir}")
     news_server = MCPServerStdio(
         name="SignalBrief Sources",
-        params=MCPServerStdioParams(command=sys.executable, args=[str(NEWS_SERVER)]),
+        # pass the full env: the MCP client otherwise forwards only a few system vars,
+        # and the eval's fault-injection switch (SIGNALBRIEF_FAULT) must reach the server
+        params=MCPServerStdioParams(command=sys.executable, args=[str(NEWS_SERVER)],
+                                    env=dict(os.environ)),
         client_session_timeout_seconds=90,
         cache_tools_list=True,
         tool_filter=budget_tool_filter,
@@ -464,6 +502,7 @@ async def main():
                         help="where the ChromaDB coverage memory lives")
     parser.add_argument("--no-memory-write", action="store_true",
                         help="read memory but don't record this run (for demos/tests)")
+    parser.add_argument("--output", help="newsletter path (default: output/newsletter_<date>.md)")
     args = parser.parse_args()
 
     config = json.loads(Path(args.topics).read_text(encoding="utf-8"))
@@ -478,7 +517,9 @@ async def main():
 
     newsletter = render_newsletter(sections, reader)
     OUTPUT_DIR.mkdir(exist_ok=True)
-    out_path = OUTPUT_DIR / f"newsletter_{date.today().isoformat()}.md"
+    out_path = (Path(args.output) if args.output
+                else OUTPUT_DIR / f"newsletter_{date.today().isoformat()}.md")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(newsletter, encoding="utf-8")
     runs_dir = OUTPUT_DIR / "runs"
     runs_dir.mkdir(exist_ok=True)

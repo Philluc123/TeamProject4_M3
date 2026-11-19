@@ -22,7 +22,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -50,10 +52,32 @@ def log(message: str) -> None:
         f.write(f"[{stamp}] {message}\n")
 
 
+RETRY_WAITS = (4, 10)  # seconds to wait after a 429 before trying again
+
+
 def http_get(url: str) -> bytes:
+    """GET with a short back-off on 429: Google News rate-limits quick follow-up searches.
+
+    Fault injection for evaluation (E8): SIGNALBRIEF_FAULT="musicbrainz.org" (comma-
+    separated hosts) makes requests to those hosts fail with HTTP 503, like the real
+    MusicBrainz outage seen on Oct 28.
+    """
+    host = urllib.parse.urlsplit(url).netloc
+    faults = [h.strip() for h in os.environ.get("SIGNALBRIEF_FAULT", "").split(",") if h.strip()]
+    if any(host == h or host.endswith("." + h) for h in faults):
+        log(f"fault injected: 503 for {host}")
+        raise urllib.error.HTTPError(url, 503, "Service Unavailable (fault injected)", {}, None)
     req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
-        return resp.read()
+    for attempt, wait in enumerate((*RETRY_WAITS, None)):
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT_SECONDS) as resp:
+                return resp.read()
+        except urllib.error.HTTPError as e:
+            if e.code != 429 or wait is None:
+                raise
+            log(f"429 from {urllib.parse.urlsplit(url).netloc}; retry {attempt + 1} in {wait}s")
+            time.sleep(wait)
+    raise RuntimeError("unreachable")
 
 
 def make_ref(prefix: str, url: str) -> str:

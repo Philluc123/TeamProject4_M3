@@ -1,0 +1,104 @@
+{
+  "description": "M4 evaluation suite: the 10 cases committed to in the M3 evaluation plan (report section 8). Run with tests/run_eval.py. Reliability rule: each live case runs 3 times and passes if >= 2/3 runs pass (E6: 5 repeats, >= 4/5).",
+  "success_threshold": ">= 8/10 cases pass, AND hard gates at 100%: zero invented citations (bad_refs = 0 in every run) and E4 never hallucinates. E10 grounding must be >= 90%.",
+  "cases": [
+    {
+      "id": "E1",
+      "name": "News topic, full pipeline",
+      "input": {"name": "New VST plugins", "kind": "news", "query": "new VST plugin release", "days": 7,
+                "why": "Music producer; wants to know when notable synths/effects launch or update."},
+      "expected_output": "recall_coverage first, then search_news; <=3 source calls; 1-4 linked bullets or the exact no-updates line; bad_refs = 0; unchecked = 0",
+      "judged_by": "Code properties"
+    },
+    {
+      "id": "E2",
+      "name": "Artist topic",
+      "input": {"name": "Kendrick Lamar", "kind": "artist", "query": "Kendrick Lamar", "days": 30,
+                "why": "Favorite artist - new albums, singles, and features."},
+      "expected_output": "get_artist_releases called; <=3 source calls (M2: 4-6); release links go to musicbrainz.org; bad_refs = 0",
+      "judged_by": "Code properties"
+    },
+    {
+      "id": "E3",
+      "name": "Research topic",
+      "input": {"name": "Cancer research breakthroughs", "kind": "research",
+                "query": "cancer immunotherapy clinical trial", "days": 7,
+                "why": "Personal interest in progress on cancer treatment."},
+      "expected_output": "First source tool is search_research_papers; bullets framed as single studies; no 'cure/miracle/breakthrough cure' wording",
+      "judged_by": "Code + keyword blocklist (framing: human review)"
+    },
+    {
+      "id": "E4",
+      "name": "Nonsense topic (hallucination gate)",
+      "input": {"name": "Zorblaxian quantum kazoo", "kind": "news", "query": "Zorblaxian quantum kazoo", "days": 7,
+                "why": "Test: this topic does not exist."},
+      "expected_output": "Handoff 1 does not fire; section is exactly '_No notable updates in this window._'; Editor and Checker not called",
+      "judged_by": "Code exact match"
+    },
+    {
+      "id": "E5",
+      "name": "Coverage memory across two runs",
+      "input": "E1 topic run twice on the same empty memory",
+      "expected_output": "Run 2 publishes no URL from run 1; memory count = run-1 published count",
+      "judged_by": "Code"
+    },
+    {
+      "id": "E6",
+      "name": "Fact-checker on seeded bullets",
+      "input": "Source headline 'Baby Keem announces new album Ca$ino, previews collaboration with Kendrick Lamar'. Bullet 0: '...Their new collaboration is the top-selling track of the week.' Bullet 1: faithful paraphrase.",
+      "expected_output": "Bullet 0 effective verdict overstated/unsupported; bullet 1 supported",
+      "judged_by": "Code on structured verdict, 5 repeats (pass >= 4/5)"
+    },
+    {
+      "id": "E7",
+      "name": "Sale filtering",
+      "input": {"name": "New VST plugins", "kind": "news", "query": "VST plugin sale", "days": 7,
+                "why": "Music producer; wants to know when notable synths/effects launch or update - not sales or deals."},
+      "expected_output": "No published bullet about a discount or deal (sale|% off|deal|discount|Black Friday = 0 hits)",
+      "judged_by": "Keyword match (+ human review)"
+    },
+    {
+      "id": "E8",
+      "name": "Source outage (MusicBrainz unreachable)",
+      "input": "SIGNALBRIEF_FAULT=musicbrainz.org (every MusicBrainz request fails with HTTP 503); topics: Kendrick Lamar (artist, 30 days) + New VST plugins (news, 7 days)",
+      "expected_output": "No crash; Scout falls back to news or the section says no updates / could not be researched; other topics unaffected",
+      "judged_by": "Code"
+    },
+    {
+      "id": "E9",
+      "name": "Full 10-topic newsletter",
+      "input": "The 10 topics in e9_topics below, one run",
+      "expected_output": "All 10 sections present, no agent errors; total <= 120K tokens; wall time <= 15 min",
+      "judged_by": "Code from run-log usage"
+    },
+    {
+      "id": "E10",
+      "name": "Grounding of every published bullet",
+      "input": "Every bullet published in E1-E3 and E9, with the headline(s) it cites",
+      "expected_output": ">= 90% rated 'supported by cited headline' by the grounding agent (qwen3, a different model from the system's gpt-oss); human spot-check of 20 bullets agrees >= 85%",
+      "judged_by": "Grounding agent (critic) + human review"
+    }
+  ],
+  "e9_topics": [
+    {"name": "New VST plugins", "kind": "news", "query": "new VST plugin release", "days": 7,
+     "why": "Music producer; wants to know when notable synths/effects launch or update."},
+    {"name": "Kendrick Lamar", "kind": "artist", "query": "Kendrick Lamar", "days": 30,
+     "why": "Favorite artist - new albums, singles, and features."},
+    {"name": "Cancer research breakthroughs", "kind": "research", "query": "cancer immunotherapy clinical trial", "days": 7,
+     "why": "Personal interest in progress on cancer treatment."},
+    {"name": "SZA", "kind": "artist", "query": "SZA", "days": 30,
+     "why": "Favorite R&B artist - new music and features."},
+    {"name": "NASA Artemis program", "kind": "news", "query": "NASA Artemis", "days": 7,
+     "why": "Follows the return-to-the-Moon missions."},
+    {"name": "EV battery technology", "kind": "news", "query": "electric vehicle battery breakthrough", "days": 7,
+     "why": "Thinking about buying an EV; wants range and charging news."},
+    {"name": "Indie game releases", "kind": "news", "query": "indie game release", "days": 7,
+     "why": "Plays indie games; wants to know about notable new releases."},
+    {"name": "Alzheimer's research", "kind": "research", "query": "Alzheimer disease treatment trial", "days": 14,
+     "why": "Family member has Alzheimer's."},
+    {"name": "CRISPR gene therapy", "kind": "research", "query": "CRISPR gene therapy", "days": 14,
+     "why": "Biology student; follows gene-editing progress."},
+    {"name": "Florida weather and hurricanes", "kind": "news", "query": "Florida hurricane forecast", "days": 7,
+     "why": "Lives in Southwest Florida."}
+  ]
+}

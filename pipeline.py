@@ -27,6 +27,14 @@ from citations import BULLET_PATTERN, REF_PATTERN, REF_GROUP_PATTERN
 
 SOURCE_TOOLS = {"search_news", "search_research_papers", "get_artist_releases"}
 MEMORY_TOOLS = {"recall_coverage"}
+# M4: source tools each topic kind may use. The Scout prompt states this rule, but in
+# the M4 baseline gpt-oss broke it on 5 of 29 non-artist topic runs (E3, E9), so the
+# tool filter now enforces it.
+KIND_TOOLS = {
+    "news": {"search_news"},
+    "artist": {"get_artist_releases", "search_news"},
+    "research": {"search_research_papers", "search_news"},
+}
 
 
 # ---------------------------------------------------------------- tool budget
@@ -41,15 +49,27 @@ class ToolBudget:
     max_memory_calls: int = 1
     source_calls: int = 0
     memory_calls: int = 0
+    kind: str | None = None          # topic kind; None = every source tool allowed
+    calls: list[str] = field(default_factory=list)
 
     def allows(self, tool_name: str) -> bool:
         if tool_name in SOURCE_TOOLS:
-            return self.source_calls < self.max_source_calls
+            if self.source_calls >= self.max_source_calls:
+                return False
+            allowed = KIND_TOOLS.get(self.kind or "")
+            if allowed is not None and tool_name not in allowed:
+                return False
+            # research topics: PubMed first; news search only after a paper search
+            if (self.kind == "research" and tool_name == "search_news"
+                    and "search_research_papers" not in self.calls):
+                return False
+            return True
         if tool_name in MEMORY_TOOLS:
             return self.memory_calls < self.max_memory_calls
         return True
 
     def record(self, tool_name: str) -> None:
+        self.calls.append(tool_name)
         if tool_name in SOURCE_TOOLS:
             self.source_calls += 1
         elif tool_name in MEMORY_TOOLS:
@@ -254,12 +274,15 @@ def effective_verdict(v: Verdict) -> tuple[str, str]:
 def apply_verdicts(bullets: list[str], report: FactCheckReport | None) -> tuple[list[str], dict]:
     """Keep supported bullets, swap in revisions for overstated ones, drop unsupported.
 
-    A bullet with no verdict (checker failed or skipped it) is kept but counted
-    as `unchecked`, and the newsletter footer says so. A "supported" verdict that
-    contradicts the checker's own reasoning is treated as overstated (counted in
-    `overridden`); with no rewrite offered, that bullet is dropped.
+    A bullet with no verdict (checker failed or skipped it, even after the retry
+    in signalbrief_agent) is left out and counted in `dropped_unchecked` (M4: in M3
+    it was published and counted as `unchecked`; `unchecked` = bullets published
+    without a verdict, now always 0). A "supported" verdict that contradicts the
+    checker's own reasoning is treated as overstated (counted in `overridden`);
+    with no rewrite offered, that bullet is dropped.
     """
-    stats = {"supported": 0, "overstated": 0, "unsupported": 0, "unchecked": 0, "overridden": 0}
+    stats = {"supported": 0, "overstated": 0, "unsupported": 0, "unchecked": 0,
+             "dropped_unchecked": 0, "overridden": 0}
     verdicts = {v.id: v for v in (report.verdicts if report else [])}
     kept = []
     for i, b in enumerate(bullets):
@@ -268,8 +291,7 @@ def apply_verdicts(bullets: list[str], report: FactCheckReport | None) -> tuple[
         if override:
             stats["overridden"] += 1
         if v is None:
-            stats["unchecked"] += 1
-            kept.append(b)
+            stats["dropped_unchecked"] += 1  # never publish a bullet nobody checked
         elif verdict == "supported":
             stats["supported"] += 1
             kept.append(b)

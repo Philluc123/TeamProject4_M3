@@ -41,7 +41,7 @@
       "id": "O7",
       "name": "Handoff 2 + fact-check verdicts are applied in code",
       "input": "4 Editor bullets (one written without a '- ' marker) and a FactCheckReport: id0 supported, id1 overstated with a revision that lost its [ref], id2 unsupported, id3 no verdict.",
-      "expected_output": "split_bullets keeps the dash-less line; the request attaches each bullet's cited records; result keeps 3 bullets: original id0, revised id1 with its ref restored, id3 kept as unchecked; id2 dropped; stats supported 1 / overstated 1 / unsupported 1 / unchecked 1."
+      "expected_output": "split_bullets keeps the dash-less line; the request attaches each bullet's cited records; result keeps 2 bullets: original id0 and revised id1 with its ref restored; id2 (unsupported) and id3 (no verdict) are left out; stats supported 1 / overstated 1 / unsupported 1 / unchecked 0 / dropped_unchecked 1. (M4: before, id3 was published as unchecked.)"
     },
     {
       "id": "O8",
@@ -60,6 +60,12 @@
       "name": "Self-contradicting 'supported' verdict is overridden",
       "input": "3 verdicts marked 'supported': (0) reasoning says 'top-selling track of the week - not mentioned in the source' (the live L6 failure); (1) claim list has one claim with in_source=false; (2) all claims in_source=true.",
       "expected_output": "Effective verdicts: overstated, overstated, supported. Bullets 0 and 1 are dropped (no rewrite offered); bullet 2 is kept; stats overridden = 2."
+    },
+    {
+      "id": "O11",
+      "name": "Tool filter enforces the kind-to-tool rule (M4)",
+      "input": "ToolBudget(kind=news / artist / research / none); research budget checked before and after one search_research_papers call",
+      "expected_output": "news: recall_coverage + search_news only; artist: recall_coverage + search_news + get_artist_releases; research: recall_coverage + search_research_papers, then search_news appears only after a paper search; no kind: every tool (old behaviour)."
     }
   ],
   "live": [
