@@ -210,8 +210,16 @@ For EACH item, think step by step:
        sources don't state. Write `revised_bullet`: the same bullet with the
        unsupported detail removed, same format, keeping its [ref] ids.
      - "unsupported": the main claim is not in the cited sources.
-Return one verdict per item id. Be strict about invented specifics; do not
-penalize plain-English paraphrase.
+Count as a claim, and check against the headline, every descriptor the bullet
+adds: product type ("synth", "VST"), genre, mechanism ("T-cell"), company type
+("startup"), audience ("indie") or outcome ("remission"). A descriptor the
+headline doesn't state or directly imply is NOT in_source -> "overstated".
+Research sources (type research or a PubMed paper): a bullet that states the
+study's result as settled fact, without attributing it ("A study reports",
+"Researchers report", "A trial found", ...), is "overstated"; its
+revised_bullet adds the attribution.
+Return one verdict for EVERY item id you received - never skip one. Be strict
+about invented specifics; do not penalize plain-English paraphrase.
 """.strip()
 
 
