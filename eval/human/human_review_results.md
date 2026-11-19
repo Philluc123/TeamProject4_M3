@@ -1,7 +1,7 @@
 # Human review results: relevance, tone and single-study framing
 
 Reviewed 18 Nov 2026 by two teammates, each on their own copy:
-`eval/Human_Review_1.csv` (rater 1) and `eval/Human_Review_2.csv` (rater 2). Rubric: `eval/human_review_rubric.md`.
+`eval/human/Human_Review_1.csv` (rater 1) and `eval/human/Human_Review_2.csv` (rater 2). Rubric: `eval/human/human_review_rubric.md`.
 Items: 32 bullets published on 17 Nov 2026, the full E9 newsletter (24) and all E3 research bullets (8).
 
 ## Relevance and tone (1-5)

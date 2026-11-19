@@ -13,3 +13,4 @@ output/web/
 
 # Office lock files
 ~$*
+eval/**/*.xlsx

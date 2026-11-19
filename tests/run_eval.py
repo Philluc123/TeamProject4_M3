@@ -5,7 +5,7 @@ M4 evaluation: run the 10 cases (E1-E10) committed to in the M3 evaluation plan.
   python tests/run_eval.py --only E4 E6     # just some cases (E10 judges whatever ran)
   python tests/run_eval.py --repeats 1      # quicker smoke run (reliability rule off)
 
-Writes to eval/:
+Writes to eval/latest/ (or --out):
   results.csv            one row per case: id, input, expected, actual, pass/fail, critic score
   results.md             same table + pass rate, hard gates and per-run details
   grounding_bullets.csv  every bullet the critic judged (with an empty column for the
@@ -506,7 +506,7 @@ def main():
     ap.add_argument("--only", nargs="+", type=str.upper, metavar="ID", help="e.g. --only E4 E6")
     ap.add_argument("--repeats", type=int, default=3, help="runs per live case (plan: 3)")
     ap.add_argument("--e9-runs", type=int, default=1, help="runs of the 10-topic newsletter")
-    ap.add_argument("--out", default="eval", help="output folder, relative to the repo (default: eval)")
+    ap.add_argument("--out", default="eval/latest", help="output folder, relative to the repo (default: eval/latest)")
     asyncio.run(main_async(ap.parse_args()))
 
 

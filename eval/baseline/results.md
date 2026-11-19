@@ -71,7 +71,7 @@ Run 2026-11-17T21:54:09 to 2026-11-17T22:18:33 · system model `gpt-oss` · crit
 
 **E10 Grounding of every published bullet: FAIL**
 - run 1 FAIL: `23/45 bullets rated supported (51%, threshold 90%); mean score 3.87/5; judge errors=0`
-- note: Agent part only: the human spot-check (20 bullets, >= 85% agreement) is pending; fill the human_agrees column in eval/grounding_bullets.csv.
+- note: Agent part only: the human spot-check (20 bullets, >= 85% agreement) is pending; fill the human_agrees column in eval/baseline/grounding_bullets.csv.
 
 ## Failure analysis
 
@@ -109,7 +109,7 @@ The critic (`qwen3`, a different model from the system's `gpt-oss`) scored 45 pu
 
 ## E10 human spot-check (added 2026-11-18)
 
-20 of the 45 judged bullets were sampled at random (seed 20261117) into `eval/human_spotcheck.csv`. A team member (Philippe Lucien) judged each against its cited headline before looking at the critic's verdict.
+20 of the 45 judged bullets were sampled at random (seed 20261117) into `eval/human/human_spotcheck.csv`. A team member (Philippe Lucien) judged each against its cited headline before looking at the critic's verdict.
 
 - **Agreement with the critic: 16/20 = 80%** (target >= 85%), so the human part of E10 also fails.
 - All 4 disagreements go one way: the critic said *not supported*, the human said *supported* (rows 3, 6, 8, 11: "any DAW" vs. the headline's "your DAW" twice, "researchers report", "T-cell"). The critic is stricter than the human on small rewordings.
@@ -118,7 +118,7 @@ The critic (`qwen3`, a different model from the system's `gpt-oss`) scored 45 pu
 
 ## E3 human review: single-study framing (added 2026-11-18)
 
-Two raters reviewed all 8 E3 bullets (full scores: `eval/human_review_results.md`). Both rated 2 bullets as **not** framed as single studies; both cite the same paper:
+Two raters reviewed all 8 E3 bullets (full scores: `eval/human/human_review_results.md`). Both rated 2 bullets as **not** framed as single studies; both cite the same paper:
 - run 1: "A high-avidity BCMA CAR achieved successful remission of systemic light-chain amyloidosis, showing potential for targeted CAR therapies."
 - run 3: "Novel high-avidity BCMA CAR T-cell therapy achieved successful treatment of systemic light-chain amyloidosis."
 
@@ -128,7 +128,7 @@ The run-2 bullet on the same paper ("Researchers report a successful treatment�
 
 ## E9 runs 2 and 3, and E10 over all bullets (added 2026-11-18)
 
-E9 was rerun twice on 18 Nov to meet the plan's 3-run rule (outputs in `eval/e9_run2/` and `eval/e9_run3/`; agent code unchanged).
+E9 was rerun twice on 18 Nov to meet the plan's 3-run rule (outputs in `eval/baseline/e9_run2/` and `eval/baseline/e9_run3/`; agent code unchanged).
 
 | E9 run | Tokens (limit 120,000) | Wall time (limit 15 min) | Bullets | Invalid citations | Wrong-tool calls | Scout retries | Critic supported |
 |---|---|---|---|---|---|---|---|
