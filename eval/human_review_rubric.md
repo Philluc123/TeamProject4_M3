@@ -1,7 +1,7 @@
 # Human review: relevance and tone (M3 evaluation plan, method 3)
 
 Two teammates each fill in their **own copy** of the sheet:
-`eval/human_review_rater1.csv` and `eval/human_review_rater2.csv`. Don't look at the other rater's scores until you're both done.
+blank sheets (completed copies: `eval/Human_Review_1.csv` and `eval/Human_Review_2.csv`). Don't look at the other rater's scores until you're both done.
 
 **What's being rated:** 32 bullets SignalBrief published on 17 Nov 2026:
 - the full E9 newsletter (24 bullets, 9 topics; the cancer-research topic published none);

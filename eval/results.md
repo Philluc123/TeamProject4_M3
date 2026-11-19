@@ -86,10 +86,10 @@ Everything except cost met the bar: 10/10 sections, no agent errors, bad_refs = 
 The wasted calls and retries cost more than the 3.2K overage. The Scout prompt states the kind-to-tool rule plainly, so this is gpt-oss not following it (a reasoning issue), not a missing instruction. Across the whole suite, **5 of 29 non-artist topic runs called `get_artist_releases`**, always as their first source call, and the Scout needed **8 retries** after its tool budget ran out.
 **Fix:** enforce the rule in code. The MCP tool filter already hides tools by budget, and it could also hide `get_artist_releases` unless kind = artist. Trimming long tool results before the Scout reads them would cut cost further.
 
-### E10 Grounding of every published bullet: FAIL (51% vs 90%), cause: reasoning issue (Editor embellishes, Fact-checker lets it through), plus a retrieval limit
+### E10 Grounding of every published bullet: FAIL (51% vs 90%), cause: reasoning issue (Editor embellishes despite its prompt, Fact-checker lets it through), plus a retrieval limit
 
 The critic (`qwen3`, a different model from the system's `gpt-oss`) scored 45 published bullets: **19 x 5, 4 x 4, 19 x 3, 3 x 2, 0 x 1**. A score of 4 or more counts as supported, so 23/45 = 51%. No bullet scored 1, so no story was invented or contradicted. 19 of the 22 failures are score 3, meaning one small detail is not in the headline:
-1. **The Editor adds detail from its own knowledge or from the topic** (reasoning/prompt): "synth" (Brother Tree Sound), "T-cell" (a CAR therapy), "indie" (a game), "a U.S. battery startup", "IL-2-based vaccine" (cretostimogene). Most are harmless. The last is not in the headline and, as far as we know, is wrong: cretostimogene is an oncolytic virus therapy. That shows the risk.
+1. **The Editor adds detail from its own knowledge or from the topic** (reasoning; its prompt says "Only state facts that appear in the candidate titles", but its "never add" examples omit descriptors): "synth" (Brother Tree Sound), "T-cell" (a CAR therapy), "indie" (a game), "a U.S. battery startup", "IL-2-based vaccine" (cretostimogene). Most are harmless. The last is not in the headline and, as far as we know, is wrong: cretostimogene is an oncolytic virus therapy. That shows the risk.
 2. **The Fact-checker accepts these additions.** It marked most of them `supported`: it is the same model that wrote them, and it is lenient on small extras. This is the reason the plan uses an independent judge.
 3. **Headline-only evidence** (retrieval): claims such as "remission" or "a review outlines…" may be true in the article, but no agent can read article bodies, so the critic cannot verify them.
 4. **Some critic calls are strict** ("any DAW" vs. "your DAW"; "researchers report"). With a cut-off of >= 3 the rate would be 42/45 (93%). The M3 threshold was >= 4, so we report the failure as measured.
@@ -124,7 +124,7 @@ Two raters reviewed all 8 E3 bullets (full scores: `eval/human_review_results.md
 
 The run-2 bullet on the same paper ("Researchers report a successful treatment…") was rated correctly framed. With the plan's framing criterion, E3 runs 1 and 3 fail, so **E3 = 1/3, FAIL**, and the overall pass rate is **7/10 (70%)**.
 
-**Cause: prompt/reasoning issue (Editor).** The Editor turns a paper title into a statement of fact. The Editor prompt does not ask it to attribute research findings to "a study" or "researchers", so the wording depends on the run.
+**Cause: reasoning issue (Editor).** The Editor prompt already says "For research papers, say plainly that it is a single study … Never imply a cure." The model followed it in run 2 and not in runs 1 and 3, turning the same paper title into a statement of fact.
 
 ## E9 runs 2 and 3, and E10 over all bullets (added 2026-11-18)
 
@@ -139,3 +139,5 @@ E9 was rerun twice on 18 Nov to meet the plan's 3-run rule (outputs in `eval/e9_
 **E9 = 0/3, FAIL.** Every run produced all 10 sections with no agent errors and no invalid citations, but every run was over the token limit, and run 2 was also over the time limit because the NRP model answered slowly that day.
 
 **E10 over every published bullet (E1-E3 x 3 runs, E9 x 3 runs): 57/108 supported (53%), mean 3.83/5** (scores: 0 x 1, 12 x 2, 39 x 3, 12 x 4, 45 x 5). Still far below 90%: FAIL.
+
+_Correction (2026-11-18): an earlier version of this file said the Editor prompt does not ask for single-study framing. It does; E3's framing failure is a reasoning issue (instruction not followed), not a missing instruction._
